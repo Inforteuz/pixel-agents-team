@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+data/
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+web/node_modules/
+web/dist/
+*.tsbuildinfo
+dataset/*.tmp
+.DS_Store
+project-briefs/

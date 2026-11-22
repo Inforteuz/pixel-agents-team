@@ -1,0 +1,11 @@
+services:
+  studio:
+    environment:
+      PIXEL_PROJECT_BRIEFS_DIR: /srv/pixel-team/briefs
+    volumes:
+      - type: bind
+        source: ./project-briefs
+        target: /srv/pixel-team/briefs
+        read_only: true
+        bind:
+          create_host_path: false

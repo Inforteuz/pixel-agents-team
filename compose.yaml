@@ -1,0 +1,23 @@
+services:
+  studio:
+    build: .
+    env_file: .env
+    environment:
+      PIXEL_DATA_DIR: /srv/pixel-team/data
+    ports:
+      - "127.0.0.1:${PIXEL_HOST_PORT:-8091}:8091"
+    volumes:
+      - studio-data:/srv/pixel-team/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 64
+    restart: unless-stopped
+
+volumes:
+  studio-data:
