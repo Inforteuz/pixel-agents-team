@@ -45,3 +45,36 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: 'false'
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+
+  self-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Start an isolated Studio on loopback
+        run: |
+          umask 077
+          python3 - <<'PY' > .env
+          import hashlib
+          import secrets
+          salt = secrets.token_bytes(16)
+          digest = hashlib.scrypt(secrets.token_bytes(32), salt=salt, n=32768,
+                                  r=8, p=1, maxmem=64 * 1024 * 1024)
+          print(f"PIXEL_ADMIN_PASSWORD_HASH='scrypt${salt.hex()}${digest.hex()}'")
+          print("APP_PUBLIC_URL=http://127.0.0.1:8091")
+          PY
+          docker compose up --build --detach
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:8091/health/ready; then
+              test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8091/api/studio)" = 401
+              exit 0
+            fi
+            sleep 1
+          done
+          docker compose logs
+          exit 1
+      - name: Stop the test instance
+        if: always()
+        run: docker compose down
