@@ -30,8 +30,8 @@ function walkToDesk(home: Point, index: number) {
   // Cross the aisle via gaps between benches, plants and server racks.
   return [
     home,
-    { x: home.x, y: 286 },
-    { x: lane, y: 286 },
+    { x: home.x, y: 298 },
+    { x: lane, y: 298 },
     { x: lane, y: 385 },
     { x: lane + (index % 2 ? -42 : 42), y: 385 },
   ];
