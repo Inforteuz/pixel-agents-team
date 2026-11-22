@@ -25,3 +25,10 @@ To regenerate, pass three keys via stdin:
 
 The generator resumes successful batches. Pass --fallback to run missing
 batches on 3.5 or 3.6 Flash. Use only synthetic prompts.
+
+The [curated Andijon additions](andijon-curated.jsonl) contain 20 hand-written
+synthetic draft cases covering chat-versus-command, direct questions, focused
+clarification and bounded handoffs. The dialect still needs native speaker
+review. Use the [Gemini prompt](GEMINI-PROMPT.md) to generate more batches
+with consistent intent, route and style labels. Keep review/evaluation examples
+separate from future few-shot or training examples.

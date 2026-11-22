@@ -37,8 +37,9 @@ import {
 } from "lucide-react";
 import Office, { Avatar } from "./Office";
 import { api, setCsrf } from "./api";
-import type { Agent, Provider, Studio } from "./types";
+import type { Agent, Provider, Studio, Task } from "./types";
 import "./style.css";
+import "./light.css";
 const now = (value: number) =>
   new Date(value * 1000).toLocaleTimeString("uz-UZ", {
     hour: "2-digit",
@@ -62,6 +63,7 @@ const taskStatus: Record<string, string> = {
   new: "Navbatda",
   running: "Bajarilmoqda",
   review: "Ko‘rib chiqish",
+  clarification: "Aniqlik kerak",
   done: "Yakunlandi",
   paused: "Pauzada",
   error: "Xatolik",
@@ -82,6 +84,8 @@ const stepLabels: Record<string, string> = {
   response: "Javob olindi",
   saved: "Javob chatga saqlandi",
   failed: "So‘rov yakunlanmadi",
+  clarification: "Egadan aniqlik so‘raldi",
+  handoff: "Keyingi agentga topshirildi",
 };
 type View = "office" | "team" | "tasks" | "settings";
 function PixelMark() {
@@ -263,6 +267,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
   );
 }
 export default function App() {
+  const [clarificationTask, setClarificationTask] = useState<Task | null>(null);
   const [theme, setTheme] = useState(
     () =>
       localStorage.getItem("pixel-theme") ||
@@ -864,6 +869,7 @@ export default function App() {
                       ["new", "Navbatda"],
                       ["running", "Bajarilmoqda"],
                       ["review", "Ko‘rib chiqish"],
+                      ["clarification", "Aniqlik kerak"],
                       ["paused", "Pauzada"],
                       ["error", "Xatolik"],
                       ["cancelled", "Bekor qilingan"],
@@ -912,7 +918,14 @@ export default function App() {
                           >
                             {taskStatus[t.status] || t.status}
                           </span>
-                          {t.status === "review" ? (
+                          {t.status === "clarification" ? (
+                            <IconButton
+                              label={`${t.title}: savolga javob berish`}
+                              onClick={() => setClarificationTask(t)}
+                            >
+                              <MessageSquare size={16} />
+                            </IconButton>
+                          ) : t.status === "review" ? (
                             <IconButton
                               label={`${t.title}ni yakunlash`}
                               onClick={() => void complete(t.id)}
@@ -1242,6 +1255,13 @@ export default function App() {
           </div>
         )}
       </div>
+      {clarificationTask && (
+        <ClarificationModal
+          task={clarificationTask}
+          onClose={() => setClarificationTask(null)}
+          onSaved={refresh}
+        />
+      )}
       {modal === "task" && data && (
         <TaskModal
           agents={data.agents}
@@ -1513,6 +1533,63 @@ function AgentDetails({
     </section>
   );
 }
+function ClarificationModal({
+  task,
+  onClose,
+  onSaved,
+}: {
+  task: Task;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [answer, setAnswer] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const send = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await api(`/api/tasks/${task.id}/clarification`, {
+        method: "POST",
+        body: JSON.stringify({ text: answer }),
+      });
+      await onSaved();
+      onClose();
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="Vazifaga aniqlik kiritish" onClose={onClose}>
+      <form className="modal-form" onSubmit={send}>
+        <strong>{task.title}</strong>
+        <p>{task.question}</p>
+        <label>
+          Javobingiz
+          <textarea
+            autoFocus
+            required
+            rows={4}
+            maxLength={1500}
+            value={answer}
+            onChange={(event) => setAnswer(event.target.value)}
+          />
+        </label>
+        {error && (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button className="primary" disabled={busy || !answer.trim()}>
+          Javobni yuborish
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
 function TaskModal({
   agents,
   project,
@@ -1527,6 +1604,7 @@ function TaskModal({
   const [title, setTitle] = useState(""),
     [description, setDescription] = useState(""),
     [agent, setAgent] = useState("developer"),
+    [teamReview, setTeamReview] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const save = async (e: FormEvent) => {
@@ -1539,6 +1617,7 @@ function TaskModal({
           title,
           description,
           agent_id: agent,
+          team_review: teamReview,
           project_id: project,
         }),
       });
@@ -1573,20 +1652,31 @@ function TaskModal({
             rows={4}
           />
         </label>
-        <label>
-          Mas’ul agent
-          <select value={agent} onChange={(e) => setAgent(e.target.value)}>
-            {agents.map((a) => (
-              <option value={a.id} key={a.id}>
-                {a.name} — {a.role}
-              </option>
-            ))}
-          </select>
+        <label className="task-team-choice">
+          <input
+            type="checkbox"
+            checked={teamReview}
+            onChange={(event) => setTeamReview(event.target.checked)}
+          />
+          Jamoaviy ko‘rib chiqish
         </label>
+        {!teamReview && (
+          <label>
+            Mas’ul agent
+            <select value={agent} onChange={(e) => setAgent(e.target.value)}>
+              {agents.map((a) => (
+                <option value={a.id} key={a.id}>
+                  {a.name} — {a.role}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="inline-note">
           <CircleHelp size={16} />
-          Vazifa navbatga saqlanadi. AI yoqilgan bo‘lsa, mas’ul agent taklif
-          tayyorlaydi. Kod avtomatik bajarilmaydi.
+          {teamReview
+            ? "Supervisor talabni tekshiradi, kerak bo‘lsa savol beradi va mos agentlarga topshiradi."
+            : "Mas’ul agent ko‘rib chiqish uchun taklif tayyorlaydi."}
         </div>
         {error && <p className="form-error">{error}</p>}
         <div className="modal-actions">

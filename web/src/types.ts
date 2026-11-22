@@ -18,6 +18,7 @@ export type Task = {
   description: string;
   agent_id: string;
   status: string;
+  question: string | null;
   created_at: number;
 };
 export type Message = {

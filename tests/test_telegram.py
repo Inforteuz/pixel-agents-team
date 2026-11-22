@@ -168,3 +168,62 @@ def test_internal_peer_reply_has_no_telegram_ingress_dependency(tmp_path, monkey
         ).fetchall()
         assert [row["agent_id"] for row in replies] == ["developer", "qa"]
     assert runtime.next_job() is None
+
+
+def test_telegram_conversation_and_quotes_do_not_create_tasks():
+    from backend.telegram import classify
+
+    for utterance in (
+        "qil deb aytdi",
+        "tuzatish kerakmi?",
+        "stop",
+        "«/task inventar» degan buyruq",
+        "исправь — так написано",
+    ):
+        assert classify(utterance) != "task"
+    assert classify("/task inventar eksportini taklif qiling?") == "task"
+    assert classify("@qa /task Filtrni tekshirish") == "task"
+
+
+def test_private_basic_group_owner_start_and_explicit_task(tmp_path, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_ALLOWED_CHAT_ID", "-700")
+    monkeypatch.setenv("OWNER_TELEGRAM_USER_ID", "123")
+    monkeypatch.setenv("TELEGRAM_QUIET_HOURS", "0")
+    app = create_app(tmp_path)
+    bridge = app.state.telegram
+    bridge.supervisor_username = "test_supervisor"
+    app.state.db.save_setting("provider", {"encrypted_key": "synthetic"})
+    base = {
+        "chat": {"id": -700, "type": "group"},
+        "from": {"id": 123},
+        "date": int(time.time()),
+    }
+    inputs = ("/start@test_supervisor", "qil deb yozibdi", "/task Inventar ro‘yxati")
+    bridge.accept_updates(
+        [
+            {"update_id": i, "message": {**base, "message_id": i, "text": message}}
+            for i, message in enumerate(inputs, 1)
+        ]
+    )
+
+    async def run():
+        async with httpx.AsyncClient() as client:
+            for _ in inputs:
+                await bridge.handle(
+                    client, bridge.pending("telegram_inbox", "queued", "processing")
+                )
+
+    asyncio.run(run())
+    with app.state.db.connect() as conn:
+        actions = [
+            (r["source_kind"], r["agent_id"])
+            for r in conn.execute(
+                "SELECT source_kind,agent_id FROM jobs ORDER BY rowid"
+            )
+        ]
+        assert actions == [("message", "supervisor"), ("team_plan", "supervisor")]
+        assert conn.execute("SELECT count(*) FROM tasks").fetchone()[0] == 1
+        assert (
+            conn.execute("SELECT agent_id FROM telegram_outbox").fetchone()[0]
+            == "supervisor"
+        )

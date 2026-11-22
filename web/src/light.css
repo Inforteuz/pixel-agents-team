@@ -1,0 +1,240 @@
+:root[data-theme="light"] {
+  color-scheme: light;
+  color: #20302a;
+  background: #eef2ed;
+  --bg: #eef2ed;
+  --panel: #fbfcf9;
+  --line: #cbd8ce;
+  --muted: #52655b;
+  --green: #2d684b;
+  --light-tint: #e5eee5;
+  --light-selected: #dcebe0;
+}
+[data-theme="light"]
+  :is(
+    .rail,
+    .topbar,
+    .chat-panel,
+    .login-form-area,
+    .modal,
+    .settings-card,
+    .task-row,
+    .agent-card,
+    .agent-details,
+    .team-profile,
+    .integration-card,
+    .office-panel,
+    .empty-board,
+    .task-mini,
+    .empty-task,
+    .chat-compose
+  ) {
+  background: var(--panel);
+  color: #20302a;
+  border-color: var(--line);
+}
+[data-theme="light"]
+  :is(
+    .tag,
+    .ai-chip,
+    .chat-tabs button span,
+    .panel-toolbar,
+    .task-table-head,
+    .local-badge,
+    .provider-mark,
+    .welcome-icon,
+    .empty-task-icon,
+    .chat-system-note
+  ) {
+  background: var(--light-tint);
+  color: #315441;
+  border-color: var(--line);
+}
+[data-theme="light"]
+  :is(
+    .agent-card.chosen,
+    .team-profile.chosen,
+    .rail-item.selected,
+    .task-filters button.active,
+    .chat-tabs button.active,
+    .role-icon,
+    .chat-roles button,
+    .icon-button:hover,
+    .icon-button.active
+  ) {
+  background: var(--light-selected);
+  color: #244c37;
+  border-color: #afc7b4;
+}
+[data-theme="light"]
+  :is(
+    input,
+    textarea,
+    select,
+    .secondary-button,
+    .small-plus,
+    .mobile-chat-toggle,
+    .message-markdown pre,
+    .message-markdown code,
+    .message-markdown th
+  ) {
+  background-color: #f0f5ef;
+  color: #223c2e;
+  border-color: #aebfb0;
+}
+[data-theme="light"] :is(input, textarea)::placeholder {
+  color: #536b60;
+}
+[data-theme="light"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%2345554d' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+[data-theme="light"] :is(.primary, .send-button:not(:disabled), .owner) {
+  background: #316246;
+  color: #fff;
+  border-color: #316246;
+}
+[data-theme="light"] .send-button:disabled {
+  background: #dce5dd;
+  color: #526b5c;
+  opacity: 1;
+}
+[data-theme="light"]
+  :is(
+    .icon-button,
+    .chat-tabs button,
+    .chat-panel-head svg,
+    .rail-item,
+    .clock,
+    .clock span,
+    .app-name,
+    .zoom-value,
+    .office-title .secondary,
+    .room-pixel,
+    .section-heading h2 span,
+    .text-button,
+    .page-heading p,
+    .message time,
+    .chat-date,
+    .chat-bottom,
+    .chat-compose > div > span,
+    .chat-compose > div > span > span,
+    .integration-note strong,
+    .integration-note p,
+    .activity-item time,
+    .profile-content p,
+    .profile-meta,
+    .profile-meta > span:last-child,
+    .ai-label,
+    .agent-status,
+    .agent-card > small,
+    .empty-task small,
+    .empty-board p,
+    .task-row small,
+    .task-row > span:not(.tag),
+    .task-filters button,
+    .task-filters button span,
+    .settings-card header p,
+    .integration-card p,
+    .login-form > p,
+    .login-privacy,
+    .eyebrow,
+    .welcome-message p,
+    .workspace-footer,
+    .version,
+    .secondary,
+    .inline-note,
+    .help-content p,
+    .typing-indicator,
+    .chat-system-note span,
+    .tag.muted
+  ) {
+  color: var(--muted);
+}
+[data-theme="light"]
+  :is(
+    .message p,
+    .message-markdown,
+    .message-markdown strong,
+    .message-markdown h1,
+    .message-markdown h2,
+    .message-markdown h3,
+    .message-markdown h4,
+    .message-markdown blockquote,
+    .activity-item p
+  ) {
+  color: #263d32;
+}
+[data-theme="light"]
+  :is(.message-markdown a, .attachment-list a, .job-status.running) {
+  color: #265f41;
+}
+[data-theme="light"] :is(.form-error, .job-status.failed) {
+  color: #a23137;
+}
+[data-theme="light"]
+  :is(
+    .chat-tabs,
+    .integration-note,
+    .settings-card header,
+    .profile-meta,
+    .task-table,
+    .task-mini-list,
+    .workspace-footer,
+    .attachment-list li,
+    .agent-details,
+    .message-markdown blockquote,
+    .message-markdown td,
+    .empty-task,
+    .task-team-choice
+  ) {
+  border-color: var(--line);
+}
+[data-theme="light"] .chat-roles {
+  border-color: var(--line);
+}
+[data-theme="light"] .profile-art {
+  background-color: #e5eee5 !important;
+  border-color: var(--line);
+}
+[data-theme="light"] .toast {
+  background: #e4f1e6;
+  color: #224c34;
+  border-color: #a9c6af;
+}
+[data-theme="light"] .toast > button {
+  color: #224c34;
+}
+[data-theme="light"] .login-page {
+  background: var(--panel);
+}
+[data-theme="light"] .login-scene {
+  background: #24352f;
+}
+[data-theme="light"] .login-scene .login-wordmark > svg {
+  color: #c1e7ac;
+}
+[data-theme="light"] .office-footer {
+  background: var(--panel);
+  border-color: var(--line);
+  color: #334f3e;
+}
+[data-theme="light"]
+  :is(.office-footer small, .office-footer span, .office-footer strong) {
+  color: #385447;
+}
+[data-theme="light"] .login-theme .icon-button {
+  background: var(--light-tint);
+  border: 1px solid var(--line);
+}
+
+[data-theme="light"] .login-wordmark > span {
+  color: #b3c8b6;
+}
+[data-theme="light"] .profile-content > span {
+  color: #315441 !important;
+}
+[data-theme="light"] .modal-form .inline-note {
+  background: var(--light-tint);
+  border-color: var(--line);
+  color: #3d5648;
+}

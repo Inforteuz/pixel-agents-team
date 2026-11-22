@@ -23,6 +23,7 @@ from .project_source import project_brief
 from .providers import PROVIDER_ID, validate_endpoint
 from .security import AuthStore, OwnerAccessMiddleware, SecuritySettings, auth_router
 from .telegram import TelegramBridge
+from .team import TASK_KINDS_SQL
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env", override=False)
@@ -46,6 +47,11 @@ class TaskInput(BaseModel):
     title: str = Field(min_length=1, max_length=180)
     description: str = Field(default="", max_length=6000)
     agent_id: str = "developer"
+    team_review: bool = False
+
+
+class ClarificationInput(BaseModel):
+    text: str = Field(min_length=1, max_length=1500)
 
 
 class AgentInput(BaseModel):
@@ -94,7 +100,7 @@ def create_app(
             await telegram.stop()
             await runtime.stop()
 
-    app = FastAPI(title="Pixel Team", version="0.4.0", lifespan=lifespan)
+    app = FastAPI(title="Pixel Team", version="0.5.0", lifespan=lifespan)
     app.state.db = db
     app.include_router(auth_router(settings, auth, ROOT / "web/dist"))
     app.add_middleware(OwnerAccessMiddleware, settings=settings, store=auth)
@@ -188,7 +194,7 @@ def create_app(
             ),
             "limits": runtime.limits(),
             "runtime": runtime.deployment_info(),
-            "version": "0.4.0",
+            "version": "0.5.0",
         }
 
     @app.post("/api/projects", status_code=201)
@@ -292,9 +298,11 @@ def create_app(
         title = payload.title.strip()
         if not title:
             raise HTTPException(422, "Vazifa nomini yozing")
+        agent_id = "supervisor" if payload.team_review else payload.agent_id
+        stage = "team_plan" if payload.team_review else "task"
         with db.connect() as conn:
             agent = conn.execute(
-                "SELECT enabled FROM agents WHERE id=?", (payload.agent_id,)
+                "SELECT enabled FROM agents WHERE id=?", (agent_id,)
             ).fetchone()
             if not agent:
                 raise HTTPException(422, "Agent topilmadi")
@@ -308,7 +316,7 @@ def create_app(
                     payload.project_id,
                     title,
                     payload.description,
-                    payload.agent_id,
+                    agent_id,
                     "new",
                     time.time(),
                     time.time(),
@@ -320,15 +328,70 @@ def create_app(
                 f"“{title}” navbatga qo‘shildi.",
                 payload.project_id,
             )
-            queued = runtime.queue(
-                conn, payload.project_id, payload.agent_id, "task", task_id
-            )
+            if payload.team_review:
+                conn.execute("INSERT INTO team_reviews(task_id) VALUES (?)", (task_id,))
+            queued = runtime.queue(conn, payload.project_id, agent_id, stage, task_id)
         return {
             "id": task_id,
             "status": "new",
             "execution_started": False,
             "queued": queued,
         }
+
+    @app.post("/api/tasks/{task_id}/clarification")
+    async def clarify_task(task_id: str, payload: ClarificationInput):
+        answer = payload.text.strip()
+        if not answer:
+            raise HTTPException(422, "Javobingizni yozing")
+        with db.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            task = conn.execute(
+                "SELECT t.project_id FROM tasks t JOIN team_reviews r ON r.task_id=t.id "
+                "WHERE t.id=? AND t.status='clarification'",
+                (task_id,),
+            ).fetchone()
+            if not task:
+                raise HTTPException(409, "Vazifa aniqlik kutmayapti")
+            if not runtime.enabled("supervisor"):
+                raise HTTPException(409, "Supervisor provayderi ulanmagan yoki o‘chiq")
+            old = conn.execute(
+                "SELECT clarification FROM team_reviews WHERE task_id=?", (task_id,)
+            ).fetchone()[0]
+            if len(old) + len(answer) > 3000:
+                raise HTTPException(
+                    409,
+                    "Aniqliklar limiti tugadi. Talablarni jamlab yangi vazifa oching.",
+                )
+            now = time.time()
+            conn.execute(
+                "UPDATE team_reviews SET clarification=?, route='' WHERE task_id=?",
+                (f"{old}\n{answer}".strip(), task_id),
+            )
+            conn.execute(
+                "INSERT INTO messages VALUES (?,?,?,?,?)",
+                (db.id(), task["project_id"], "owner", answer, now),
+            )
+            conn.execute(
+                f"DELETE FROM team_replies WHERE job_id IN (SELECT id FROM jobs WHERE reference_id=? AND source_kind IN {TASK_KINDS_SQL})",
+                (task_id,),
+            )
+            conn.execute(
+                f"UPDATE jobs SET status='cancelled',error_code=NULL WHERE reference_id=? AND source_kind IN {TASK_KINDS_SQL}",
+                (task_id,),
+            )
+            plan = conn.execute(
+                "SELECT id FROM jobs WHERE reference_id=? AND source_kind='team_plan'",
+                (task_id,),
+            ).fetchone()[0]
+            conn.execute(
+                "UPDATE jobs SET status='queued',updated_at=? WHERE id=?",
+                (now, plan),
+            )
+            db.job_step(conn, plan, "queued")
+            conn.execute(
+                "UPDATE tasks SET status='new',updated_at=? WHERE id=?", (now, task_id)
+            )
+        return {"queued": True}
 
     @app.post("/api/tasks/{task_id}/cancel")
     async def cancel_task(task_id: str):
@@ -370,7 +433,7 @@ def create_app(
             )
             conn.execute(
                 "UPDATE jobs SET status='paused',error_code='owner_pause',updated_at=? "
-                "WHERE source_kind='task' AND reference_id=? AND status IN ('queued','running')",
+                f"WHERE source_kind IN {TASK_KINDS_SQL} AND reference_id=? AND status IN ('queued','running')",
                 (time.time(), task_id),
             )
             db.event(
@@ -403,21 +466,33 @@ def create_app(
                 raise HTTPException(404, "Vazifa topilmadi")
             if task["status"] not in ("new", "paused", "error"):
                 raise HTTPException(409, "Bu vazifani hozir qayta boshlash mumkin emas")
-            if not runtime.enabled(task["agent_id"]):
+            job = conn.execute(
+                f"SELECT id,agent_id FROM jobs WHERE source_kind IN {TASK_KINDS_SQL} AND reference_id=? "
+                "AND status IN ('queued','paused','failed') ORDER BY updated_at DESC LIMIT 1",
+                (task_id,),
+            ).fetchone()
+            if not runtime.enabled(job["agent_id"] if job else task["agent_id"]):
                 raise HTTPException(
                     409, "Agent provayderi ulanmagan yoki chaqiruvlar o‘chiq"
                 )
-            job = conn.execute(
-                "SELECT id FROM jobs WHERE source_kind='task' AND reference_id=?",
-                (task_id,),
-            ).fetchone()
             if job and job["id"] in runtime.active:
                 raise HTTPException(409, "Avvalgi so‘rov hali tugamadi. Biroz kuting.")
-            runtime.queue(conn, task["project_id"], task["agent_id"], "task", task_id)
-            conn.execute(
-                "UPDATE jobs SET status='queued',error_code=NULL,updated_at=? WHERE source_kind='task' AND reference_id=? AND status IN ('paused','failed')",
-                (time.time(), task_id),
-            )
+            if job:
+                conn.execute(
+                    "UPDATE jobs SET status='queued',error_code=NULL,updated_at=? WHERE id=?",
+                    (time.time(), job["id"]),
+                )
+            else:
+                team = conn.execute(
+                    "SELECT 1 FROM team_reviews WHERE task_id=?", (task_id,)
+                ).fetchone()
+                runtime.queue(
+                    conn,
+                    task["project_id"],
+                    task["agent_id"],
+                    "team_plan" if team else "task",
+                    task_id,
+                )
             conn.execute(
                 "UPDATE tasks SET status='new',updated_at=? WHERE id=?",
                 (time.time(), task_id),

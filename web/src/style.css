@@ -2772,106 +2772,15 @@ button:hover:not(:disabled) {
     display: none;
   }
 }
-:root[data-theme="light"] {
-  color-scheme: light;
-  color: #202b2a;
-  background: #eef2ee;
-  --bg: #eef2ee;
-  --panel: #fbfcfa;
-  --line: #cbd6cd;
-  --muted: #4b6158;
-  --green: #386d51;
+
+.task-team-choice {
+  flex-direction: row;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
-[data-theme="light"] :is(.rail, .topbar, .chat-panel, .login-form-area) {
-  background: #fafcf8;
-  color: #22372e;
-}
-[data-theme="light"]
-  :is(
-    .settings-card,
-    .task-table-head,
-    .task-row,
-    .agent-card,
-    .agent-details,
-    .team-profile,
-    .integration-card,
-    .office-panel,
-    .modal,
-    .chat-compose,
-    .chat-system-note,
-    .task-card
-  ) {
-  background: #f6faf5;
-  border-color: var(--line);
-  color: #253d32;
-}
-[data-theme="light"]
-  :is(
-    input,
-    textarea,
-    select,
-    .secondary-button,
-    .small-plus,
-    .mobile-chat-toggle,
-    .chat-roles button,
-    .chat-tabs button.active
-  ) {
-  background-color: #eaf1e8;
-  color: #274737;
-  border-color: #bacdbd;
-}
-[data-theme="light"]
-  :is(
-    .message p,
-    .message-markdown,
-    .message-markdown strong,
-    .message-markdown h1,
-    .message-markdown h2,
-    .message-markdown h3,
-    .activity-item p,
-    .welcome-message p,
-    .page-heading p,
-    .task-row small
-  ) {
-  color: #324c40;
-}
-[data-theme="light"]
-  :is(.message-markdown pre, .message-markdown code, .message-markdown th) {
-  background-color: #e4eee5;
-  color: #284033;
-  border-color: #bacdbd;
-}
-[data-theme="light"] .primary {
-  background: #37694d;
-  color: #fff;
-  border-color: #37694d;
-}
-[data-theme="light"]
-  :is(
-    .rail-item.selected,
-    .tag,
-    .ai-chip,
-    .chat-tabs button span,
-    .panel-toolbar,
-    .local-badge
-  ) {
-  background: #e0ece1;
-  color: #315943;
-  border-color: #bacdbd;
-}
-[data-theme="light"]
-  :is(
-    .integration-note p,
-    .integration-note strong,
-    .login-form > p,
-    .agent-status,
-    .welcome-caption,
-    .chat-bottom,
-    .chat-compose > div > span,
-    .icon-button,
-    .chat-tabs button,
-    .clock,
-    .message time
-  ) {
-  color: #4b6158;
+.task-team-choice input {
+  width: auto;
+  accent-color: var(--green);
 }

@@ -92,8 +92,10 @@ class OpenAICompatible:
         self.headers = {"Authorization": "Bearer " + key}
         self.deepseek, self.transport = deepseek, transport
 
-    async def complete(self, messages, max_tokens):
+    async def complete(self, messages, max_tokens, *, json_object=False):
         body = {"model": self.model, "messages": messages, "stream": False}
+        if json_object:
+            body["response_format"] = {"type": "json_object"}
         if self.deepseek:
             body.update(max_tokens=max_tokens, thinking={"type": "disabled"})
         else:

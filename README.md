@@ -4,6 +4,12 @@ Pixel Team is a private AI team studio with a pixel office, project chat,
 and an optional five-bot Telegram bridge. Version 0.4 adds owner-only Telegram
 routing, voice transcription, project memory, and per-agent usage.
 
+Use the team review checkbox on a new web task for a bounded proposal review.
+The Supervisor asks for missing requirements, or routes through up to two
+relevant specialists and gives a summary. The board shows clarification
+requests and accepts the owner's answer. The five role guides are versioned
+in backend/skills. Team review uses the assigned providers’ JSON response mode.
+
 An independent local web studio inspired by the top-down pixel office in
 [Pixel Agents](https://github.com/pixel-agents-hq/pixel-agents). This application
 does not import Ant Colony code, UI, runtime data, tools or provider drivers.
@@ -63,7 +69,7 @@ Changing the hash invalidates old sessions. Do not place raw passwords in argv.
 
 ## Telegram and voice
 
-Create five bots with BotFather and add them to a private supergroup. The
+Create five bots with BotFather and add them to a private group or supergroup. The
 Supervisor is the only polling bot. It needs privacy mode disabled by the owner
 for regular group messages and voice notes. Leave privacy mode enabled for the
 other four. Use dedicated bot tokens and remove any webhook from the Supervisor

@@ -151,6 +151,20 @@ class Database:
                 PRAGMA user_version=5;
                 COMMIT;
                 """)
+            if version < 6:
+                db.executescript("""
+                BEGIN IMMEDIATE;
+                CREATE TABLE team_reviews (
+                    task_id TEXT PRIMARY KEY REFERENCES tasks(id),
+                    route TEXT NOT NULL DEFAULT '', clarification TEXT NOT NULL DEFAULT ''
+                );
+                CREATE TABLE team_replies (
+                    job_id TEXT PRIMARY KEY REFERENCES jobs(id),
+                    message_id TEXT NOT NULL REFERENCES messages(id)
+                );
+                PRAGMA user_version=6;
+                COMMIT;
+                """)
         path.chmod(0o600)
 
     @contextmanager
@@ -214,7 +228,11 @@ class Database:
                 "tasks": [
                     dict(r)
                     for r in db.execute(
-                        "SELECT * FROM tasks WHERE project_id=? ORDER BY created_at DESC LIMIT 200",
+                        "SELECT t.*, CASE WHEN t.status='clarification' THEN "
+                        "(SELECT m.text FROM team_replies r JOIN jobs j ON j.id=r.job_id "
+                        "JOIN messages m ON m.id=r.message_id WHERE j.reference_id=t.id "
+                        "AND j.project_id=t.project_id ORDER BY r.rowid DESC LIMIT 1) END AS question "
+                        "FROM tasks t WHERE t.project_id=? ORDER BY t.created_at DESC LIMIT 200",
                         (project_id,),
                     )
                 ],

@@ -15,10 +15,14 @@ from zoneinfo import ZoneInfo
 from datetime import datetime
 
 import httpx
+from .team import TEAM_STAGES
 
 ROLES = ("supervisor", "developer", "qa", "devops", "security")
 MENTION = re.compile(
     r"^@(" + "|".join(ROLES) + r")(?:\+(" + "|".join(ROLES) + r"))?\b", re.I
+)
+TASK_COMMAND = re.compile(
+    r"^(?:@(?:supervisor|developer|qa|devops|security)\s+)?/task[ \t]+(?=\S)", re.I
 )
 BOTS = re.compile(r"\d{5,}:[A-Za-z0-9_-]{20,}")
 FILES = {
@@ -69,11 +73,7 @@ def classify(text, attached=False):
         r"(salom|assalomu alaykum|привет|спасибо|rahmat|hi)[.! ]*", text, re.I
     ):
         return "social"
-    if re.match(
-        r"^(?:@\S+\s+)?(?:/task\s+|qil(?:ing)?\b|tuzat\b|создай\b|исправь\b)",
-        text,
-        re.I,
-    ):
+    if TASK_COMMAND.match(text):
         return "task"
     if text.endswith("?"):
         return "question"
@@ -101,6 +101,7 @@ class TelegramBridge:
         self.owner_id = self.integer("OWNER_TELEGRAM_USER_ID")
         self.tasks = []
         self.connected = False
+        self.supervisor_username = ""
 
     @staticmethod
     def integer(name):
@@ -173,7 +174,7 @@ class TelegramBridge:
             not sender.get("is_bot")
             and sender.get("id") == self.owner_id
             and chat.get("id") == self.chat_id
-            and chat.get("type") == "supergroup"
+            and chat.get("type") in {"group", "supergroup"}
             and not msg.get("sender_chat")
             and time.time() - msg.get("date", 0) <= 86400
         )
@@ -202,11 +203,13 @@ class TelegramBridge:
             while True:
                 try:
                     if not self.connected:
+                        me = await self.bot(client, "supervisor", "getMe", {})
+                        self.supervisor_username = me["username"].casefold()
                         group = await self.bot(
                             client, "supervisor", "getChat", {"chat_id": self.chat_id}
                         )
                         if (
-                            group["type"] != "supergroup"
+                            group["type"] not in {"group", "supergroup"}
                             or group.get("username")
                             or group.get("active_usernames")
                         ):
@@ -439,16 +442,23 @@ class TelegramBridge:
         urgent = "voice" not in msg and text.startswith("/urgent ")
         if urgent:
             text = text.removeprefix("/urgent ").strip()
+        is_start = (
+            not attachment
+            and "voice" not in msg
+            and text.casefold()
+            in {
+                "/start",
+                f"/start@{self.supervisor_username}",
+            }
+        )
+        if is_start:
+            note = "Guruh Pixel Team’ga ulandi. Savol yozing yoki /task bilan vazifa oching."
         intent = classify(text, bool(attachment))
         # Voice always enters chat. Only typed task requests create board items.
         explicit_task = "voice" not in msg and intent == "task"
         pause = "voice" not in msg and text.casefold() in {
             "/pause",
             "/stop",
-            "stop",
-            "pauza",
-            "стоп",
-            "пауза",
         }
         with self.db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -501,18 +511,14 @@ class TelegramBridge:
             )
             if eligible:
                 match = MENTION.match(text)
-                agent = (
-                    match[1].lower()
-                    if match
-                    else ("developer" if explicit_task else "supervisor")
-                )
+                agent = match[1].lower() if match else "supervisor"
                 peer = match[2].lower() if match and match[2] else None
                 if peer == agent or "voice" in msg:
                     peer = None
                 reference, kind = message_id, "message"
                 if explicit_task:
-                    task_text = re.sub(r"^(?:@\S+\s+)?/task\s+", "", text, flags=re.I)
-                    reference, kind = self.db.id(), "task"
+                    task_text = TASK_COMMAND.sub("", text, count=1).strip()
+                    reference, kind = self.db.id(), "task" if match else "team_plan"
                     now = time.time()
                     conn.execute(
                         "INSERT INTO tasks VALUES (?,?,?,?,?,'new',?,?)",
@@ -526,10 +532,18 @@ class TelegramBridge:
                             now,
                         ),
                     )
+                    if kind in TEAM_STAGES:
+                        conn.execute(
+                            "INSERT INTO team_reviews(task_id) VALUES (?)", (reference,)
+                        )
                 enabled = conn.execute(
                     "SELECT enabled FROM agents WHERE id=?", (agent,)
                 ).fetchone()
                 if not enabled or not enabled["enabled"]:
+                    if explicit_task:
+                        conn.execute(
+                            "UPDATE tasks SET status='paused' WHERE id=?", (reference,)
+                        )
                     publish(
                         conn,
                         self.db,
@@ -548,6 +562,10 @@ class TelegramBridge:
                         (job["id"], self.chat_id, source_id, peer),
                     )
                 else:
+                    if explicit_task:
+                        conn.execute(
+                            "UPDATE tasks SET status='paused' WHERE id=?", (reference,)
+                        )
                     publish(
                         conn,
                         self.db,

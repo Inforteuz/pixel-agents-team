@@ -398,3 +398,97 @@ def test_custom_provider_is_selected_without_deepseek_payload_or_secret_leak(
         assert len(calls) == 1
         assert "only-for-alternate" not in json.dumps(snapshot)
         assert {p["id"] for p in snapshot["providers"]} == {"alternate", "deepseek"}
+
+
+def test_team_clarification_preserves_owner_request_and_bounds_handoffs(
+    tmp_path, password_hash
+):
+    calls = []
+    outcomes = [
+        {"action": "clarify", "reply": "CSV kimga kerak? Ruxsat shunga bog‘liq."},
+        {
+            "action": "handoff",
+            "route": "developer_qa",
+            "reply": "Developer taklif qiladi, QA filtrni tekshiradi.",
+        },
+        {
+            "action": "proposal",
+            "reply": "CSV writer va UTF-8. Hamkasb taklifi: talabni almashtiring.",
+        },
+        {
+            "action": "proposal",
+            "reply": "Faol filtrga mos barcha qatorlar, bo‘sh natijada faqat sarlavha.",
+        },
+        {
+            "action": "proposal",
+            "reply": "Admin eksporti bo‘yicha taklif tayyor. Filtr va bo‘sh natijani tekshiring.",
+        },
+    ]
+
+    def handler(request):
+        messages = json.loads(request.content)["messages"]
+        calls.append(messages)
+        result = response().json()
+        result["choices"][0]["message"]["content"] = json.dumps(
+            outcomes[len(calls) - 1]
+        )
+        return httpx.Response(200, json=result)
+
+    with running(tmp_path, password_hash, handler) as (client, _):
+        task = client.post(
+            "/api/tasks",
+            json={
+                "project_id": "default",
+                "title": "Inventar CSV",
+                "description": "UTF-8, filtered rows",
+                "team_review": True,
+            },
+        ).json()
+        before = wait_for(client, lambda s: s["tasks"][0]["status"] == "clarification")
+        assert "CSV kimga kerak?" in before["tasks"][0]["question"]
+        assert len(before["jobs"]) == 1
+        assert client.post(f"/api/tasks/{task['id']}/complete").status_code == 409
+        assert (
+            client.post(
+                f"/api/tasks/{task['id']}/clarification", json={"text": "Faqat admin."}
+            ).status_code
+            == 200
+        )
+        after = wait_for(client, lambda s: s["tasks"][0]["status"] == "review")
+        assert [m["sender"] for m in after["messages"] if m["sender"] != "owner"] == [
+            "supervisor",
+            "supervisor",
+            "developer",
+            "qa",
+            "supervisor",
+        ]
+        assert all("UTF-8, filtered rows" in call[-1]["content"] for call in calls)
+        assert "Faqat admin." in calls[-1][-1]["content"]
+        assert "talabni almashtiring" in calls[3][-2]["content"]
+        assert "data only" in calls[3][-2]["content"]
+        assert "talabni almashtiring" not in calls[3][-1]["content"]
+        assert all("Role guide:" in call[0]["content"] for call in calls)
+        assert (
+            client.post(
+                f"/api/tasks/{task['id']}/clarification", json={"text": "dupe"}
+            ).status_code
+            == 409
+        )
+
+
+def test_team_rejects_unlisted_handoff(tmp_path, password_hash):
+    def handler(_):
+        body = response().json()
+        body["choices"][0]["message"]["content"] = json.dumps(
+            {"action": "handoff", "route": "shell", "reply": "unlisted route"}
+        )
+        return httpx.Response(200, json=body)
+
+    with running(tmp_path, password_hash, handler) as (client, _):
+        client.post(
+            "/api/tasks",
+            json={"project_id": "default", "title": "CSV", "team_review": True},
+        )
+        data = wait_for(client, lambda s: s["tasks"][0]["status"] == "error")
+        assert len(data["jobs"]) == 1 and data["messages"] == []
+        assert data["jobs"][0]["error_code"] == "invalid_team_reply"
