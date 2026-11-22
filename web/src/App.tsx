@@ -1736,10 +1736,10 @@ function Settings({
           base_url: baseUrl,
         }),
       });
-      setProviderId(id);
       setKey("");
       setError("");
       await onSaved("Provayder saqlandi.");
+      setProviderId(id);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1774,6 +1774,7 @@ function Settings({
           <label>
             Provayder
             <select
+              aria-label="Provayder"
               value={providerId}
               onChange={(e) => pickProvider(e.target.value)}
             >
@@ -1792,7 +1793,7 @@ function Settings({
                 required
                 value={customId}
                 maxLength={32}
-                pattern="[a-z][a-z0-9-]{0,31}"
+                pattern="[a-z](?:[a-z0-9]|-){0,31}"
                 onChange={(e) => setCustomId(e.target.value)}
                 placeholder="Masalan, openrouter"
               />
